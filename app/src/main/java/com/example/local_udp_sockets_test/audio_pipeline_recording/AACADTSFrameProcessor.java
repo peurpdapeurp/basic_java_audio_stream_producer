@@ -1,9 +1,9 @@
 package com.example.local_udp_sockets_test.audio_pipeline_recording;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 
 import android.content.Context;
@@ -24,6 +24,7 @@ public class AACADTSFrameProcessor implements Runnable {
 
     private Context ctx_;
     private InputStream is_ = null;
+    private OutputStream os_ = null;
     private Thread t_;
     ADTSFrameReadingState readingState_;
     AACADTSFrameBundler bundler_;
@@ -49,6 +50,8 @@ public class AACADTSFrameProcessor implements Runnable {
         this.is_ = is;
     }
 
+    public void setOutputStream(OutputStream os) { this.os_ = os; }
+
     public void start() {
         if (t_ == null) {
             t_ = new Thread(this);
@@ -59,8 +62,8 @@ public class AACADTSFrameProcessor implements Runnable {
     public void stop() {
         if (t_ != null) {
             try {
-                is_.close();
-            } catch (IOException ignore) {}
+
+            }
             t_.interrupt();
             try {
                 t_.join();
@@ -131,10 +134,7 @@ public class AACADTSFrameProcessor implements Runnable {
 
                         Log.d(TAG, "Contents of full audio bundle: " + Helpers.bytesToHex(audioBundle));
 
-                        Intent i = new Intent(InterModuleInfo.AAC_ADTS_Frame_Processor_AUDIO_BUNDLE_AVAILABLE);
-                        i.putExtra(InterModuleInfo.AAC_ADTS_Frame_Processor_EXTRA_AUDIO_BUNDLE_ARRAY,
-                                    audioBundle);
-                        LocalBroadcastManager.getInstance(ctx_).sendBroadcast(i);
+                        os_.write(audioBundle);
                     }
                     else {
                         Log.d(TAG, "Bundler did not yet have full bundle, extracting next ADTS frame...");
@@ -142,8 +142,6 @@ public class AACADTSFrameProcessor implements Runnable {
 
                     // we did not read past the end of the current ADTS frame
                     if (readingState_.current_bytes_read == readingState_.current_frame_length) {
-
-
                         readingState_.current_bytes_read = 0;
                         readingState_.current_frame_length = Short.MAX_VALUE;
                     }

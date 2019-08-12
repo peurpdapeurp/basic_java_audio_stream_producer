@@ -2,13 +2,8 @@
 package com.example.local_udp_sockets_test;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
 import android.media.MediaPlayer;
-import android.media.MediaRecorder;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
@@ -17,16 +12,12 @@ import android.view.View;
 import android.widget.Button;
 
 import com.example.local_udp_sockets_test.audio_pipeline_recording.AACADTSFramePacketizer;
-import com.example.local_udp_sockets_test.audio_pipeline_recording.AACADTSFrameProcessor;
-import com.example.local_udp_sockets_test.audio_pipeline_recording.AudioRecordingRunnable;
-import com.example.local_udp_sockets_test.helpers.InterModuleInfo;
+import com.example.local_udp_sockets_test.audio_pipeline_recording.AudioReceiver;
+import com.example.local_udp_sockets_test.audio_pipeline_recording.AudioRecorder;
 
 import net.named_data.jndn.Data;
 import net.named_data.jndn.Face;
-import net.named_data.jndn.Interest;
-import net.named_data.jndn.InterestFilter;
 import net.named_data.jndn.Name;
-import net.named_data.jndn.OnInterestCallback;
 import net.named_data.jndn.OnRegisterFailed;
 import net.named_data.jndn.encoding.EncodingException;
 import net.named_data.jndn.security.KeyChain;
@@ -34,17 +25,13 @@ import net.named_data.jndn.security.SecurityException;
 import net.named_data.jndn.security.identity.IdentityManager;
 import net.named_data.jndn.security.identity.MemoryIdentityStorage;
 import net.named_data.jndn.security.identity.MemoryPrivateKeyStorage;
-import net.named_data.jndn.security.pib.Pib;
-import net.named_data.jndn.security.pib.PibImpl;
 import net.named_data.jndn.security.policy.SelfVerifyPolicyManager;
-import net.named_data.jndn.security.tpm.Tpm;
-import net.named_data.jndn.security.tpm.TpmBackEnd;
 import net.named_data.jndn.util.MemoryContentCache;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -54,36 +41,10 @@ public class MainActivity extends AppCompatActivity {
     long currentSegmentNum_ = 0;
     Face face_;
     MemoryContentCache mmc_;
-
-    BroadcastReceiver AACADTSFrameProcessorListener = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            Name dataName = new Name("/test/audio");
-            dataName.appendVersion(1);
-            dataName.appendSegment(currentSegmentNum_);
-            boolean final_block = currentSegmentNum_ == 3 ? true : false;
-            Data audioPacket = AACADTSFramePacketizer.generateAudioDataPacket(dataName,
-                    intent.getByteArrayExtra(InterModuleInfo.AAC_ADTS_Frame_Processor_EXTRA_AUDIO_BUNDLE_ARRAY),
-                    final_block, currentSegmentNum_);
-
-            Log.d(TAG, "Name of audio data packet: " + audioPacket.getName());
-            Log.d(TAG, "Contents of audio data packet: " + Helpers.bytesToHex(audioPacket.getContent().getImmutableArray()));
-
-            mmc_.add(audioPacket);
-
-            currentSegmentNum_++;
-
-//            try {
-//                File audioFile = new File(getExternalCacheDir().getAbsolutePath() + "/" + currentBundleNum_ + ".aac");
-//                FileOutputStream os = new FileOutputStream(audioFile);
-//                os.write(audioPacket.getContent().getImmutableArray());
-//                os.close();
-//                currentBundleNum_++;
-//            }
-//            catch (IOException e) { e.printStackTrace(); }
-
-        }
-    };
+    FileInputStream arecv_is_;
+    FileOutputStream arec_os_;
+    AudioReceiver arecv_;
+    AudioRecorder arec_;
 
     private static KeyChain
     configureKeyChain() {
@@ -146,19 +107,49 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        LocalBroadcastManager.getInstance(this).registerReceiver(AACADTSFrameProcessorListener,
-                                                                    AACADTSFrameProcessor.getIntentFilter());
+        ParcelFileDescriptor[] mParcelFileDescriptors = null;
+        ParcelFileDescriptor mParcelRead;
+        ParcelFileDescriptor mParcelWrite;
 
-        Thread audioRecordingThread = new Thread(new AudioRecordingRunnable(this));
-        audioRecordingThread.run();
+        // create an array of parcel file descriptors
+        try {
+            mParcelFileDescriptors = ParcelFileDescriptor.createPipe();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        mParcelRead = new ParcelFileDescriptor(mParcelFileDescriptors[0]);
+        mParcelWrite = new ParcelFileDescriptor(mParcelFileDescriptors[1]);
 
-    }
+        arecv_is_ = new FileInputStream(mParcelRead.getFileDescriptor());
+        arec_os_ = new FileOutputStream(mParcelWrite.getFileDescriptor());
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
+        arecv_ = new AudioReceiver(this, arecv_is_, new AudioReceiver.AudioReceiverCallbacks() {
+            @Override
+            public void onReceivedAudioBundle(byte[] audioBundle) {
+                Log.d(TAG, "onReceivedAudioBundle was triggered in MainActivity.");
 
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(AACADTSFrameProcessorListener);
+                Name dataName = new Name("/test/audio");
+                dataName.appendVersion(1);
+                dataName.appendSegment(currentSegmentNum_);
+                boolean final_block = currentSegmentNum_ == 3 ? true : false;
+                Data audioPacket = AACADTSFramePacketizer.generateAudioDataPacket(dataName,
+                                                                                  audioBundle,
+                                                                                  final_block,
+                                                                                  currentSegmentNum_);
+
+                Log.d(TAG, "Name of audio data packet: " + audioPacket.getName());
+                Log.d(TAG, "Contents of audio data packet: " + Helpers.bytesToHex(audioPacket.getContent().getImmutableArray()));
+
+                mmc_.add(audioPacket);
+
+                currentSegmentNum_++;
+            }
+        });
+        arecv_.start();
+
+        arec_ = new AudioRecorder(this, arec_os_);
+        arec_.start();
+
     }
 
     private class SetUpMMCTask extends AsyncTask
@@ -207,6 +198,18 @@ public class MainActivity extends AppCompatActivity {
             super.onPostExecute(o);
 
             Log.d(TAG, "Finished setting up MMC.");
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        try {
+            arecv_is_.close();
+            arec_os_.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 }
