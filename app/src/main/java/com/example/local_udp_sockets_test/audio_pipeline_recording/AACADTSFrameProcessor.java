@@ -37,11 +37,6 @@ public class AACADTSFrameProcessor implements Runnable {
         int current_bytes_read = 0;
     }
 
-    public static class ADTSFrame {
-        ADTSFrame (byte[] buffer) { this.buffer = buffer; }
-        byte[] buffer;
-    }
-
     public AACADTSFrameProcessor(Context ctx, File cacheDir) {
         ctx_ = ctx;
         cacheDir_ = cacheDir;

@@ -2,6 +2,14 @@ package com.example.local_udp_sockets_test;
 
 import android.util.Log;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Arrays;
+
 public class Helpers {
 
     public static final byte[] temp_key = new byte[] {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
@@ -36,5 +44,42 @@ public class Helpers {
             Log.d(TAG, veryLongString.substring(start, end));
         }
     }
+
+    public static void writeHexStringToFile(String path, String hexString) {
+        byte[] test_aac_file_byte_array = Helpers.hexStringToByteArray(hexString);
+        File test_aac_file = new File(path);
+
+        OutputStream os = null;
+        try {
+            os = new FileOutputStream(test_aac_file);
+            os.write(test_aac_file_byte_array);
+            os.close();
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+     public static void printFileAsHexString(String TAG, String path) {
+         byte[] buf = new byte[20000];
+         byte[] real_contents = null;
+
+         FileInputStream is = null;
+         int read_size = 0;
+         try {
+             is = new FileInputStream(path);
+             read_size = is.available();
+             is.read(buf, 0, read_size);
+             real_contents = Arrays.copyOf(buf, read_size);
+         } catch (FileNotFoundException e) {
+             e.printStackTrace();
+         } catch (IOException e) {
+             e.printStackTrace();
+         }
+
+         Log.d(TAG, "Contents of " + path + " (length: " + read_size + "):");
+         Helpers.printLongString(TAG, Helpers.bytesToHex(real_contents));
+     }
 
 }
