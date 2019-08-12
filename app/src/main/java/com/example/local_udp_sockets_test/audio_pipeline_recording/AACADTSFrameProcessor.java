@@ -1,29 +1,34 @@
-package com.example.local_udp_sockets_test;
+package com.example.local_udp_sockets_test.audio_pipeline_recording;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.Arrays;
 
-import android.media.MediaPlayer;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.util.Log;
 
-public class AACADTSPacketizer implements Runnable {
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
-    private final static String TAG = "AACADTSPacketizer";
+import com.example.local_udp_sockets_test.Helpers;
+import com.example.local_udp_sockets_test.helpers.InterModuleInfo;
+
+public class AACADTSFrameProcessor implements Runnable {
+
+    private final static String TAG = "AACADTSFrameProcessor";
 
     private final static int MAX_READ_SIZE = 2000;
 
+    private Context ctx_;
     private InputStream is_ = null;
     private Thread t_;
-    private File cacheDir_;
     ADTSFrameReadingState readingState_;
-
-    AudioDecoderThread mDecoder_;
-
-    int currentFileNum_ = 0;
+    AACADTSFrameBundler bundler_;
+    AACADTSFramePacketizer packetizer_;
+    File cacheDir_;
 
     // reference for ADTS header format: https://wiki.multimedia.cx/index.php/ADTS
     private static class ADTSFrameReadingState {
@@ -32,10 +37,17 @@ public class AACADTSPacketizer implements Runnable {
         int current_bytes_read = 0;
     }
 
-    public AACADTSPacketizer(File cacheDir) {
+    public static class ADTSFrame {
+        ADTSFrame (byte[] buffer) { this.buffer = buffer; }
+        byte[] buffer;
+    }
+
+    public AACADTSFrameProcessor(Context ctx, File cacheDir) {
+        ctx_ = ctx;
         cacheDir_ = cacheDir;
         readingState_ = new ADTSFrameReadingState();
-        mDecoder_ = new AudioDecoderThread();
+        bundler_ = new AACADTSFrameBundler();
+        packetizer_ = new AACADTSFramePacketizer();
     }
 
     public void setInputStream(InputStream is) {
@@ -43,7 +55,7 @@ public class AACADTSPacketizer implements Runnable {
     }
 
     public void start() {
-        if (t_ ==null) {
+        if (t_ == null) {
             t_ = new Thread(this);
             t_.start();
         }
@@ -64,7 +76,7 @@ public class AACADTSPacketizer implements Runnable {
 
     public void run() {
 
-        Log.d(TAG,"AAC ADTS packetizer started !");
+        Log.d(TAG,"AAC ADTS frame processor stopped.");
 
         byte[] final_adts_frame_buffer;
 
@@ -113,30 +125,25 @@ public class AACADTSPacketizer implements Runnable {
                     Log.d(TAG, "ADTS frame read from MediaRecorder stream: " +
                         Helpers.bytesToHex(final_adts_frame_buffer));
 
-                    // write the ADTS frame we just read into a temp file for playback
-                    File ADTSFile = new File(cacheDir_.getAbsolutePath() + "/" + currentFileNum_ + ".aac");
-                    currentFileNum_++;
+                    bundler_.addFrame(final_adts_frame_buffer);
 
-                    OutputStream os = new FileOutputStream(ADTSFile);
-                    os.write(final_adts_frame_buffer, 0, readingState_.current_frame_length);
-                    os.close();
+                    // check if there is a full bundle of audio data in the bundler yet; if there is,
+                    // deliver it to the AACADTSFramePacketizer
+                    if (bundler_.hasFullBundle()) {
+                        Log.d(TAG, "Bundler did have a full bundle, packetizing full audio bundle...");
 
-//                    mDecoder_.startPlay(tempADTSFile.getAbsolutePath());
-//
-//                    tempADTSFile.delete();
+                        byte[] audioBundle = bundler_.getCurrentBundle();
 
-                    MediaPlayer player = new MediaPlayer();
+                        Log.d(TAG, "Contents of full audio bundle: " + Helpers.bytesToHex(audioBundle));
 
-                    try {
-                        player.setDataSource(ADTSFile.getAbsolutePath());
-                        player.prepare();
-                        player.start();
-                    } catch (IOException e) {
-                        e.printStackTrace();
+                        Intent i = new Intent(InterModuleInfo.AAC_ADTS_Frame_Processor_AUDIO_BUNDLE_AVAILABLE);
+                        i.putExtra(InterModuleInfo.AAC_ADTS_Frame_Processor_EXTRA_AUDIO_BUNDLE_ARRAY,
+                                    audioBundle);
+                        LocalBroadcastManager.getInstance(ctx_).sendBroadcast(i);
                     }
-
-                    player.stop();
-                    player.release();
+                    else {
+                        Log.d(TAG, "Bundler did not yet have full bundle, extracting next ADTS frame...");
+                    }
 
                     // we did not read past the end of the current ADTS frame
                     if (readingState_.current_bytes_read == readingState_.current_frame_length) {
@@ -164,8 +171,27 @@ public class AACADTSPacketizer implements Runnable {
             e.printStackTrace();
         }
 
-        Log.d(TAG,"AAC ADTS packetizer stopped !");
+        Log.d(TAG, "AAC ADTS frame processor was interrupted; checking for last audio bundle...");
+        if (bundler_.getCurrentBundleSize() > 0) {
+            Log.d(TAG, "Detected a leftover audio bundle with " + bundler_.getCurrentBundleSize() + " frames.");
+            byte[] audioBundle = bundler_.getCurrentBundle();
 
+            Log.d(TAG, "Contents of last full audio bundle: " + Helpers.bytesToHex(audioBundle));
+
+            Intent i = new Intent(InterModuleInfo.AAC_ADTS_Frame_Processor_AUDIO_BUNDLE_AVAILABLE);
+            i.putExtra(InterModuleInfo.AAC_ADTS_Frame_Processor_EXTRA_AUDIO_BUNDLE_ARRAY,
+                    audioBundle);
+            LocalBroadcastManager.getInstance(ctx_).sendBroadcast(i);
+        }
+
+        Log.d(TAG,"AAC ADTS frame processor stopped.");
+
+    }
+
+    public static IntentFilter getIntentFilter() {
+        IntentFilter ret = new IntentFilter();
+        ret.addAction(InterModuleInfo.AAC_ADTS_Frame_Processor_AUDIO_BUNDLE_AVAILABLE);
+        return ret;
     }
 
 }
