@@ -1,10 +1,13 @@
 package com.example.local_udp_sockets_test;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 
+import android.media.MediaPlayer;
 import android.util.Log;
 
 public class AACADTSPacketizer implements Runnable {
@@ -18,16 +21,21 @@ public class AACADTSPacketizer implements Runnable {
     private File cacheDir_;
     ADTSFrameReadingState readingState_;
 
+    AudioDecoderThread mDecoder_;
+
+    int currentFileNum_ = 0;
+
     // reference for ADTS header format: https://wiki.multimedia.cx/index.php/ADTS
     private static class ADTSFrameReadingState {
         byte[] buffer = new byte[MAX_READ_SIZE];
-        short current_frame_length = 0; // includes ADTS header length
+        short current_frame_length = Short.MAX_VALUE; // includes ADTS header length
         int current_bytes_read = 0;
     }
 
     public AACADTSPacketizer(File cacheDir) {
         cacheDir_ = cacheDir;
         readingState_ = new ADTSFrameReadingState();
+        mDecoder_ = new AudioDecoderThread();
     }
 
     public void setInputStream(InputStream is) {
@@ -98,14 +106,44 @@ public class AACADTSPacketizer implements Runnable {
                 // processing and set the reading state properly
                 if (readingState_.current_bytes_read >= readingState_.current_frame_length) {
 
+                    Log.d(TAG, "Detected that we read a full ADTS frame. Length of current ADTS frame: " +
+                            readingState_.current_frame_length);
+
                     final_adts_frame_buffer = Arrays.copyOf(readingState_.buffer, readingState_.current_frame_length);
                     Log.d(TAG, "ADTS frame read from MediaRecorder stream: " +
                         Helpers.bytesToHex(final_adts_frame_buffer));
 
+                    // write the ADTS frame we just read into a temp file for playback
+                    File ADTSFile = new File(cacheDir_.getAbsolutePath() + "/" + currentFileNum_ + ".aac");
+                    currentFileNum_++;
+
+                    OutputStream os = new FileOutputStream(ADTSFile);
+                    os.write(final_adts_frame_buffer, 0, readingState_.current_frame_length);
+                    os.close();
+
+//                    mDecoder_.startPlay(tempADTSFile.getAbsolutePath());
+//
+//                    tempADTSFile.delete();
+
+                    MediaPlayer player = new MediaPlayer();
+
+                    try {
+                        player.setDataSource(ADTSFile.getAbsolutePath());
+                        player.prepare();
+                        player.start();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+                    player.stop();
+                    player.release();
+
                     // we did not read past the end of the current ADTS frame
                     if (readingState_.current_bytes_read == readingState_.current_frame_length) {
+
+
                         readingState_.current_bytes_read = 0;
-                        readingState_.current_frame_length = 0;
+                        readingState_.current_frame_length = Short.MAX_VALUE;
                     }
                     else { // we did read past the end of the current ADTS frame
                         int read_over_length = readingState_.current_bytes_read - readingState_.current_frame_length;
@@ -114,7 +152,7 @@ public class AACADTSPacketizer implements Runnable {
                                          read_over_length);
 
                         readingState_.current_bytes_read = read_over_length;
-                        readingState_.current_frame_length = 0;
+                        readingState_.current_frame_length = Short.MAX_VALUE;
                     }
 
                 }

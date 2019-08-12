@@ -1,5 +1,7 @@
 package com.example.local_udp_sockets_test;
 
+import android.util.Log;
+
 public class Helpers {
 
     private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
@@ -21,6 +23,16 @@ public class Helpers {
                     + Character.digit(s.charAt(i+1), 16));
         }
         return data;
+    }
+
+    public static void printLongString(String TAG, String veryLongString) {
+        int maxLogSize = 1000;
+        for (int i = 0; i <= veryLongString.length() / maxLogSize; i++) {
+            int start = i * maxLogSize;
+            int end = (i + 1) * maxLogSize;
+            end = end > veryLongString.length() ? veryLongString.length() : end;
+            Log.d(TAG, veryLongString.substring(start, end));
+        }
     }
 
 }
