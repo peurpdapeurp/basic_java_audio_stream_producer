@@ -1,3 +1,4 @@
+
 package com.example.local_udp_sockets_test;
 
 import java.io.FileDescriptor;
@@ -31,7 +32,9 @@ public class AudioStreamer implements Runnable {
     InputStream mediaRecorderInputStream_;
     ADTSFrameReadingState readingState_;
     FrameBundler bundler_;
+
     FramePacketizer packetizer_;
+    int currentSegmentNum_ = 0;
 
     LinkedTransferQueue outputQueue_;
 
@@ -143,7 +146,9 @@ public class AudioStreamer implements Runnable {
 
                         Log.d(TAG, "Contents of full audio bundle: " + Helpers.bytesToHex(audioBundle));
 
-                        Data audioPacket = packetizer_.generateAudioDataPacket(new Name("/test/data"), audioBundle, true, 0);
+                        Data audioPacket = packetizer_.generateAudioDataPacket(new Name("/test/data"), audioBundle, false, currentSegmentNum_);
+
+                        currentSegmentNum_++;
 
                         outputQueue_.add(audioPacket);
                     }
@@ -172,15 +177,27 @@ public class AudioStreamer implements Runnable {
 
             Log.d(TAG, "AudioStreamer frame processor was interrupted; checking for last audio bundle...");
             if (bundler_.getCurrentBundleSize() > 0) {
-                Log.d(TAG, "Detected a leftover audio bundle with " + bundler_.getCurrentBundleSize() + " frames.");
+                Log.d(TAG, "Detected a leftover audio bundle after recording ended with " + bundler_.getCurrentBundleSize() + " frames," +
+                                " publishing a partially filled end of stream data packet (segment number " + currentSegmentNum_ + ").");
                 byte[] audioBundle = bundler_.getCurrentBundle();
 
                 Log.d(TAG, "Contents of last full audio bundle: " + Helpers.bytesToHex(audioBundle));
 
-                Data audioPacket = packetizer_.generateAudioDataPacket(new Name("/test/data"), audioBundle, true, 0);
+                Data endOfStreamPacket = packetizer_.generateAudioDataPacket(new Name("/test/data"), audioBundle, true, currentSegmentNum_);
 
-                outputQueue_.add(audioPacket);
+                outputQueue_.add(endOfStreamPacket);
             }
+            else {
+                Log.d(TAG, "Detected no leftover audio bundle after recording ended, publishing empty end of stream data packet " +
+                                "(segment number " + currentSegmentNum_ + ").");
+
+                Data endOfStreamPacket = packetizer_.generateAudioDataPacket(new Name("/test/data"), new byte[] {}, true, currentSegmentNum_);
+
+                outputQueue_.add(endOfStreamPacket);
+            }
+
+            // reset the segment number
+            currentSegmentNum_ = 0;
 
         } catch (IOException e) {
             e.printStackTrace();

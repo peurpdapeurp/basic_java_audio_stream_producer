@@ -1,3 +1,4 @@
+
 package com.example.local_udp_sockets_test;
 
 import android.util.Log;
@@ -81,7 +82,9 @@ public class NetworkThread implements Runnable {
             while (!Thread.interrupted()) {
                 if (inputQueue_.size() != 0) {
                     Data data = (Data) inputQueue_.poll();
-                    Log.d(TAG, "NetworkThread received data packet: " + data);
+                    Log.d(TAG, "NetworkThread received data packet." + "\n" +
+                            "Name: " + data.getName() + "\n" +
+                            "FinalBlockId: " + data.getMetaInfo().getFinalBlockId().getValue().toHex());
                     mcc_.add(data);
                 }
                 face_.processEvents();
