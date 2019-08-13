@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.UUID;
 import java.util.concurrent.LinkedTransferQueue;
 
 import android.media.MediaRecorder;
@@ -34,9 +35,16 @@ public class AudioStreamer implements Runnable {
     FrameBundler bundler_;
 
     FramePacketizer packetizer_;
-    int currentSegmentNum_ = 0;
+    long currentStreamID_ = 0;
+    long currentSegmentNum_ = 0;
+    Name channelName_;
+    Name uuid_;
 
     LinkedTransferQueue outputQueue_;
+
+    private enum AudioFormat {
+        AAC_ADTS
+    }
 
     // reference for ADTS header format: https://wiki.multimedia.cx/index.php/ADTS
     private static class ADTSFrameReadingState {
@@ -45,13 +53,16 @@ public class AudioStreamer implements Runnable {
         int current_bytes_read = 0;
     }
 
-    public AudioStreamer(LinkedTransferQueue outputQueue) {
+    public AudioStreamer(LinkedTransferQueue outputQueue, Name channelName) {
+        // set up necessary state
         readingState_ = new ADTSFrameReadingState();
         bundler_ = new FrameBundler();
         packetizer_ = new FramePacketizer();
         outputQueue_ = outputQueue;
+        channelName_ = channelName;
+        uuid_ = new Name(UUID.randomUUID().toString());
 
-        // create an array of parcel file descriptors
+        // set up file descriptors to read stream from MediaRecorderThread
         try {
             mediaRecorderPfs_ = ParcelFileDescriptor.createPipe();
         } catch (IOException e) {
@@ -63,6 +74,8 @@ public class AudioStreamer implements Runnable {
         mediaRecorderThread_ = new MediaRecorderThread(mediaRecorderWritePfs_.getFileDescriptor());
         mediaRecorderInputStream_ = new ParcelFileDescriptor.AutoCloseInputStream(mediaRecorderReadPfs_);
     }
+
+    public Name getUuid() { return uuid_; }
 
     public void start() {
         if (t_ == null) {
@@ -80,6 +93,7 @@ public class AudioStreamer implements Runnable {
             } catch (InterruptedException e) {}
             t_ = null;
         }
+        currentStreamID_++; // increment stream ID by one for next recording
     }
 
     public void run() {
@@ -146,7 +160,7 @@ public class AudioStreamer implements Runnable {
 
                         Log.d(TAG, "Contents of full audio bundle: " + Helpers.bytesToHex(audioBundle));
 
-                        Data audioPacket = packetizer_.generateAudioDataPacket(new Name("/test/data"), audioBundle, false, currentSegmentNum_);
+                        Data audioPacket = packetizer_.generateAudioDataPacket(audioBundle, false, currentSegmentNum_);
 
                         currentSegmentNum_++;
 
@@ -183,7 +197,7 @@ public class AudioStreamer implements Runnable {
 
                 Log.d(TAG, "Contents of last full audio bundle: " + Helpers.bytesToHex(audioBundle));
 
-                Data endOfStreamPacket = packetizer_.generateAudioDataPacket(new Name("/test/data"), audioBundle, true, currentSegmentNum_);
+                Data endOfStreamPacket = packetizer_.generateAudioDataPacket(audioBundle, true, currentSegmentNum_);
 
                 outputQueue_.add(endOfStreamPacket);
             }
@@ -191,7 +205,7 @@ public class AudioStreamer implements Runnable {
                 Log.d(TAG, "Detected no leftover audio bundle after recording ended, publishing empty end of stream data packet " +
                                 "(segment number " + currentSegmentNum_ + ").");
 
-                Data endOfStreamPacket = packetizer_.generateAudioDataPacket(new Name("/test/data"), new byte[] {}, true, currentSegmentNum_);
+                Data endOfStreamPacket = packetizer_.generateAudioDataPacket(new byte[] {}, true, currentSegmentNum_);
 
                 outputQueue_.add(endOfStreamPacket);
             }
@@ -324,12 +338,25 @@ public class AudioStreamer implements Runnable {
 
         private static final String TAG = "AudioStreamer_FramePacketizer";
 
-        public Data generateAudioDataPacket(Name name, byte[] audioBundle, boolean final_block, long seg_num) {
-            Data data = new Data(name);
+        public Data generateAudioDataPacket(byte[] audioBundle, boolean final_block, long seg_num) {
+
+            // generate the audio packet's name
+            Name dataName = new Name();
+            dataName.append("/pscr/NDN-PTT");
+            dataName.append(channelName_); // append the channel name
+            dataName.append(uuid_); // append the uuid
+            dataName.appendTimestamp(System.currentTimeMillis()); // append the timestamp
+            dataName.appendSequenceNumber(currentStreamID_); // set the stream ID
+            dataName.appendVersion(AudioFormat.AAC_ADTS.ordinal()); // set the audio format
+            dataName.appendSegment(seg_num); // set the segment ID
+
+            // generate the audio packet and fill it with the audio bundle data
+            Data data = new Data(dataName);
             data.setContent(new Blob(audioBundle));
             // TODO: need to add real signing of data packet
             KeyChain.signWithHmacWithSha256(data, new Blob(Helpers.temp_key));
 
+            // set the final block id, if this is the last audio packet of its stream
             MetaInfo metaInfo = new MetaInfo();
             if (final_block) {
                 metaInfo.setFinalBlockId(Name.Component.fromSegment(seg_num));
@@ -337,6 +364,7 @@ public class AudioStreamer implements Runnable {
             }
 
             return data;
+
         }
 
     }
