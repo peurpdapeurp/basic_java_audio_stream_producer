@@ -23,14 +23,14 @@ public class MainActivity extends AppCompatActivity {
 
         LinkedTransferQueue streamToNetworkQueue = new LinkedTransferQueue();
 
-        net_ = new NetworkThread(streamToNetworkQueue);
+        net_ = new NetworkThread(streamToNetworkQueue, getExternalCacheDir());
         net_.start();
 
         streamer_ = new AudioStreamer(streamToNetworkQueue, new Name("/fake_channel"));
         Log.d(TAG, "Streamer initialized, uuid: " + streamer_.getUuid());
         streamer_.start();
 
-        try { Thread.sleep(1400); } catch (InterruptedException e) { e.printStackTrace(); }
+        try { Thread.sleep(5000); } catch (InterruptedException e) { e.printStackTrace(); }
 
         streamer_.stop();
 

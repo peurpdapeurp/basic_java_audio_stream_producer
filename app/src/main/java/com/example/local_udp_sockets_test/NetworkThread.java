@@ -16,6 +16,7 @@ import net.named_data.jndn.security.identity.MemoryPrivateKeyStorage;
 import net.named_data.jndn.security.policy.SelfVerifyPolicyManager;
 import net.named_data.jndn.util.MemoryContentCache;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Queue;
 import java.util.concurrent.LinkedTransferQueue;
@@ -28,9 +29,11 @@ public class NetworkThread implements Runnable {
     private Queue inputQueue_;
     Face face_;
     MemoryContentCache mcc_;
+    File cacheDir_;
 
-    public NetworkThread(LinkedTransferQueue inputQueue) {
+    public NetworkThread(LinkedTransferQueue inputQueue, File cacheDir) {
         inputQueue_ = inputQueue;
+        cacheDir_ = cacheDir;
     }
 
     public void start() {
@@ -69,7 +72,7 @@ public class NetworkThread implements Runnable {
 
             // set up memory content cache
             mcc_ = new MemoryContentCache(face_);
-            mcc_.registerPrefix(new Name("/test/audio"),
+            mcc_.registerPrefix(new Name("/pscr/NRT-PTT"),
                     new OnRegisterFailed() {
                         @Override
                         public void onRegisterFailed(Name prefix) {
@@ -86,6 +89,10 @@ public class NetworkThread implements Runnable {
                             "Name: " + data.getName() + "\n" +
                             "FinalBlockId: " + data.getMetaInfo().getFinalBlockId().getValue().toHex());
                     mcc_.add(data);
+
+//                    // write the audio packets to the app's external cache for testing purposes
+//                    Helpers.writeHexStringToFile(cacheDir_.getAbsolutePath() + "/" + data.getName().get(-1).toNumber() + ".aac",
+//                                                Helpers.bytesToHex(data.getContent().getImmutableArray()));
                 }
                 face_.processEvents();
             }

@@ -342,10 +342,10 @@ public class AudioStreamer implements Runnable {
 
             // generate the audio packet's name
             Name dataName = new Name();
-            dataName.append("/pscr/NDN-PTT");
+            dataName.append("pscr").append("NRT-PTT");
             dataName.append(channelName_); // append the channel name
-            dataName.append(uuid_); // append the uuid
-            dataName.appendTimestamp(System.currentTimeMillis()); // append the timestamp
+            //dataName.append(uuid_); // append the uuid
+            dataName.append("fake_uuid");
             dataName.appendSequenceNumber(currentStreamID_); // set the stream ID
             dataName.appendVersion(AudioFormat.AAC_ADTS.ordinal()); // set the audio format
             dataName.appendSegment(seg_num); // set the segment ID
