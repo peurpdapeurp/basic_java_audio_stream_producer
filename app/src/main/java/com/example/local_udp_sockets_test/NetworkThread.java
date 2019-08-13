@@ -72,7 +72,7 @@ public class NetworkThread implements Runnable {
 
             // set up memory content cache
             mcc_ = new MemoryContentCache(face_);
-            mcc_.registerPrefix(new Name("/pscr/NRT-PTT"),
+            mcc_.registerPrefix(new Name("/a"),
                     new OnRegisterFailed() {
                         @Override
                         public void onRegisterFailed(Name prefix) {

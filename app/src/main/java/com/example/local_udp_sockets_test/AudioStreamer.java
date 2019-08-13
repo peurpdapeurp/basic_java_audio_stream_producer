@@ -37,8 +37,7 @@ public class AudioStreamer implements Runnable {
     FramePacketizer packetizer_;
     long currentStreamID_ = 0;
     long currentSegmentNum_ = 0;
-    Name channelName_;
-    Name uuid_;
+    Name currentStreamPrefix_;
 
     LinkedTransferQueue outputQueue_;
 
@@ -53,14 +52,12 @@ public class AudioStreamer implements Runnable {
         int current_bytes_read = 0;
     }
 
-    public AudioStreamer(LinkedTransferQueue outputQueue, Name channelName) {
+    public AudioStreamer(LinkedTransferQueue outputQueue) {
         // set up necessary state
         readingState_ = new ADTSFrameReadingState();
         bundler_ = new FrameBundler();
         packetizer_ = new FramePacketizer();
         outputQueue_ = outputQueue;
-        channelName_ = channelName;
-        uuid_ = new Name(UUID.randomUUID().toString());
 
         // set up file descriptors to read stream from MediaRecorderThread
         try {
@@ -75,9 +72,8 @@ public class AudioStreamer implements Runnable {
         mediaRecorderInputStream_ = new ParcelFileDescriptor.AutoCloseInputStream(mediaRecorderReadPfs_);
     }
 
-    public Name getUuid() { return uuid_; }
-
-    public void start() {
+    public void start(Name streamPrefix) {
+        currentStreamPrefix_ = streamPrefix;
         if (t_ == null) {
             t_ = new Thread(this);
             t_.start();
@@ -341,13 +337,7 @@ public class AudioStreamer implements Runnable {
         public Data generateAudioDataPacket(byte[] audioBundle, boolean final_block, long seg_num) {
 
             // generate the audio packet's name
-            Name dataName = new Name();
-            dataName.append("pscr").append("NRT-PTT");
-            dataName.append(channelName_); // append the channel name
-            //dataName.append(uuid_); // append the uuid
-            dataName.append("fake_uuid");
-            dataName.appendSequenceNumber(currentStreamID_); // set the stream ID
-            dataName.appendVersion(AudioFormat.AAC_ADTS.ordinal()); // set the audio format
+            Name dataName = new Name(currentStreamPrefix_);
             dataName.appendSegment(seg_num); // set the segment ID
 
             // generate the audio packet and fill it with the audio bundle data
