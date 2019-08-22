@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedTransferQueue;
 
 import android.content.Context;
@@ -51,7 +52,7 @@ public class AudioStreamer implements Runnable {
     long currentStreamID_ = 0;
     long currentSegmentNum_ = 0;
     Name currentStreamPrefix_;
-    HashMap<Name, Long> streamToFinalBlockId_; // records final block id of stream names
+    ConcurrentHashMap<Name, Long> streamToFinalBlockId_; // records final block id of stream names
     LinkedTransferQueue<Data> audioPacketTransferQueue_;
     NetworkThread networkThread_;
     Context ctx_;
@@ -89,7 +90,7 @@ public class AudioStreamer implements Runnable {
         mediaRecorderThread_ = new MediaRecorderThread(mediaRecorderWritePfs_.getFileDescriptor());
         mediaRecorderInputStream_ = new ParcelFileDescriptor.AutoCloseInputStream(mediaRecorderReadPfs_);
 
-        streamToFinalBlockId_ = new HashMap<>();
+        streamToFinalBlockId_ = new ConcurrentHashMap<>();
 
         networkThread_ = new NetworkThread(new Name(ctx_.getString(R.string.network_prefix)));
 
@@ -475,6 +476,7 @@ public class AudioStreamer implements Runnable {
 
                                 if (finalBlockId == null) {
                                     Log.d(TAG, "Did not find final block id for stream with name " + streamPrefix.toUri());
+                                    mcc_.storePendingInterest(interest, face);
                                 }
                                 else {
                                     Log.d(TAG, "Found final block id " + finalBlockId + " for stream with name " + streamPrefix.toUri());
@@ -482,12 +484,17 @@ public class AudioStreamer implements Runnable {
                                     appNack.setName(interest.getName());
                                     MetaInfo metaInfo = new MetaInfo();
                                     metaInfo.setType(ContentType.NACK);
+                                    metaInfo.setFreshnessPeriod(1.0);
+                                    appNack.setMetaInfo(metaInfo);
                                     appNack.setContent(new Blob(Helpers.longToBytes(finalBlockId)));
                                     Log.d(TAG, "Putting application nack with name " + interest.getName().toUri() + " in mcc.");
                                     mcc_.add(appNack);
-
+                                    try {
+                                        face.putData(appNack);
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
                                 }
-                                mcc_.storePendingInterest(interest, face);
 
                             }
                         }
