@@ -13,8 +13,6 @@ import android.widget.TextView;
 import net.named_data.jndn.Data;
 import net.named_data.jndn.Name;
 
-import java.util.concurrent.LinkedTransferQueue;
-
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
@@ -26,35 +24,29 @@ public class MainActivity extends AppCompatActivity {
     EditText streamNameInput_;
     EditText streamIdInput_;
     AudioStreamer streamer_;
-    NetworkThread net_;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        LinkedTransferQueue streamToNetworkQueue = new LinkedTransferQueue();
-
         uiLog_ = (TextView) findViewById(R.id.ui_log);
 
-        net_ = new NetworkThread(streamToNetworkQueue, new Name(getString(R.string.network_prefix)), getExternalCacheDir(),
-                new NetworkThread.Callbacks() {
+        streamer_ = new AudioStreamer(this, new AudioStreamer.Callbacks() {
+            @Override
+            public void onAudioPacket(final Data audioPacket) {
+                runOnUiThread(new Runnable() {
                     @Override
-                    public void onAudioPacket(final Data audioPacket) {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                uiLog_.append("---" + "Time: " + System.currentTimeMillis() + "---" + "\n" +
-                                        "Published audio data packet." + "\n" +
-                                        "Name: " + audioPacket.getName() + "\n" +
-                                        "\n");
-                            }
-                        });
+                    public void run() {
+                        uiLog_.append("---" + "Time: " + System.currentTimeMillis() + "---" + "\n" +
+                                "Network thread received audio data packet." + "\n" +
+                                "Name: " + audioPacket.getName().toUri() + "\n" +
+                                "\n");
                     }
                 });
-        net_.start();
-
-        streamer_ = new AudioStreamer(streamToNetworkQueue);
+            }
+        });
 
         streamNameInput_ = (EditText) findViewById(R.id.stream_name_input);
         streamIdInput_ = (EditText) findViewById(R.id.stream_id_input);

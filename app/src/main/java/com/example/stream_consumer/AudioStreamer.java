@@ -6,17 +6,33 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.concurrent.LinkedTransferQueue;
 
+import android.content.Context;
 import android.media.MediaRecorder;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
+import net.named_data.jndn.ContentType;
 import net.named_data.jndn.Data;
+import net.named_data.jndn.Face;
+import net.named_data.jndn.Interest;
+import net.named_data.jndn.InterestFilter;
 import net.named_data.jndn.MetaInfo;
 import net.named_data.jndn.Name;
+import net.named_data.jndn.OnInterestCallback;
+import net.named_data.jndn.OnRegisterFailed;
+import net.named_data.jndn.OnRegisterSuccess;
+import net.named_data.jndn.encoding.EncodingException;
 import net.named_data.jndn.security.KeyChain;
+import net.named_data.jndn.security.SecurityException;
+import net.named_data.jndn.security.identity.IdentityManager;
+import net.named_data.jndn.security.identity.MemoryIdentityStorage;
+import net.named_data.jndn.security.identity.MemoryPrivateKeyStorage;
+import net.named_data.jndn.security.policy.SelfVerifyPolicyManager;
 import net.named_data.jndn.util.Blob;
+import net.named_data.jndn.util.MemoryContentCache;
 
 public class AudioStreamer implements Runnable {
 
@@ -25,23 +41,24 @@ public class AudioStreamer implements Runnable {
     private final static int MAX_READ_SIZE = 2000;
 
     private Thread t_;
-
     MediaRecorderThread mediaRecorderThread_;
     ParcelFileDescriptor[] mediaRecorderPfs_;
     ParcelFileDescriptor mediaRecorderReadPfs_, mediaRecorderWritePfs_;
     InputStream mediaRecorderInputStream_;
     ADTSFrameReadingState readingState_;
     FrameBundler bundler_;
-
     FramePacketizer packetizer_;
     long currentStreamID_ = 0;
     long currentSegmentNum_ = 0;
     Name currentStreamPrefix_;
+    HashMap<Name, Long> streamToFinalBlockId_; // records final block id of stream names
+    LinkedTransferQueue<Data> audioPacketTransferQueue_;
+    NetworkThread networkThread_;
+    Context ctx_;
+    Callbacks callbacks_;
 
-    LinkedTransferQueue outputQueue_;
-
-    private enum AudioFormat {
-        AAC_ADTS
+    public interface Callbacks {
+        void onAudioPacket(Data audioPacket);
     }
 
     // reference for ADTS header format: https://wiki.multimedia.cx/index.php/ADTS
@@ -51,12 +68,14 @@ public class AudioStreamer implements Runnable {
         int current_bytes_read = 0;
     }
 
-    public AudioStreamer(LinkedTransferQueue outputQueue) {
+    public AudioStreamer(Context ctx, Callbacks callbacks) {
+        ctx_ = ctx;
+        callbacks_ = callbacks;
         // set up necessary state
         readingState_ = new ADTSFrameReadingState();
         bundler_ = new FrameBundler();
         packetizer_ = new FramePacketizer();
-        outputQueue_ = outputQueue;
+        audioPacketTransferQueue_ = new LinkedTransferQueue<>();
 
         // set up file descriptors to read stream from MediaRecorderThread
         try {
@@ -69,6 +88,15 @@ public class AudioStreamer implements Runnable {
 
         mediaRecorderThread_ = new MediaRecorderThread(mediaRecorderWritePfs_.getFileDescriptor());
         mediaRecorderInputStream_ = new ParcelFileDescriptor.AutoCloseInputStream(mediaRecorderReadPfs_);
+
+        streamToFinalBlockId_ = new HashMap<>();
+
+        networkThread_ = new NetworkThread(new Name(ctx_.getString(R.string.network_prefix)));
+
+    }
+
+    public Long getFinalBlockIdOfStream(Name streamPrefix) {
+        return streamToFinalBlockId_.get(streamPrefix);
     }
 
     public void start(Name streamPrefix) {
@@ -99,6 +127,7 @@ public class AudioStreamer implements Runnable {
 
         try {
 
+            networkThread_.start();
             mediaRecorderThread_.start();
 
             while (!Thread.interrupted()) {
@@ -160,7 +189,7 @@ public class AudioStreamer implements Runnable {
 
                         currentSegmentNum_++;
 
-                        outputQueue_.add(audioPacket);
+                        audioPacketTransferQueue_.add(audioPacket);
                     }
                     else {
                         Log.d(TAG, "Bundler did not yet have full bundle, extracting next ADTS frame...");
@@ -195,7 +224,9 @@ public class AudioStreamer implements Runnable {
 
                 Data endOfStreamPacket = packetizer_.generateAudioDataPacket(audioBundle, true, currentSegmentNum_);
 
-                outputQueue_.add(endOfStreamPacket);
+                streamToFinalBlockId_.put(currentStreamPrefix_, currentSegmentNum_);
+
+                audioPacketTransferQueue_.add(endOfStreamPacket);
             }
             else {
                 Log.d(TAG, "Detected no leftover audio bundle after recording ended, publishing empty end of stream data packet " +
@@ -203,7 +234,9 @@ public class AudioStreamer implements Runnable {
 
                 Data endOfStreamPacket = packetizer_.generateAudioDataPacket(new byte[] {}, true, currentSegmentNum_);
 
-                outputQueue_.add(endOfStreamPacket);
+                streamToFinalBlockId_.put(currentStreamPrefix_, currentSegmentNum_);
+
+                audioPacketTransferQueue_.add(endOfStreamPacket);
             }
 
             // reset the segment number
@@ -367,6 +400,153 @@ public class AudioStreamer implements Runnable {
 
             return data;
 
+        }
+
+    }
+
+    private class NetworkThread implements Runnable {
+
+        private final static String TAG = "NetworkThread";
+
+        private Thread t_;
+        Face face_;
+        MemoryContentCache mcc_;
+        Name networkPrefix_;
+
+        public NetworkThread(Name networkPrefix) {
+            networkPrefix_ = networkPrefix;
+        }
+
+        public void start() {
+            if (t_ == null) {
+                t_ = new Thread(this);
+                t_.start();
+            }
+        }
+
+        public void stop() {
+            if (t_ != null) {
+                t_.interrupt();
+                try {
+                    t_.join();
+                } catch (InterruptedException e) {}
+                t_ = null;
+            }
+        }
+
+        public void run() {
+
+            Log.d(TAG,"NetworkThread started.");
+
+            try {
+
+                // set up keychain
+                KeyChain keyChain = configureKeyChain();
+
+                // set up face
+                face_ = new Face();
+                try {
+                    face_.setCommandSigningInfo(keyChain, keyChain.getDefaultCertificateName());
+                } catch (SecurityException e) {
+                    e.printStackTrace();
+                }
+
+                // set up memory content cache
+                mcc_ = new MemoryContentCache(face_);
+                mcc_.registerPrefix(networkPrefix_,
+                        new OnRegisterFailed() {
+                            @Override
+                            public void onRegisterFailed(Name prefix) {
+                                Log.d(TAG, "Prefix registration for " + prefix + " failed.");
+                            }
+                        },
+                        new OnRegisterSuccess() {
+                            @Override
+                            public void onRegisterSuccess(Name prefix, long registeredPrefixId) {
+                                Log.d(TAG, "Prefix registration for " + prefix + " succeeded.");
+                            }
+                        },
+                        new OnInterestCallback() {
+                            @Override
+                            public void onInterest(Name prefix, Interest interest, Face face, long interestFilterId, InterestFilter filter) {
+                                Log.d(TAG, "No data in MCC found for interest " + interest.getName().toUri());
+                                Name streamPrefix = interest.getName().getPrefix(-1);
+                                Long finalBlockId = streamToFinalBlockId_.get(streamPrefix);
+
+                                if (finalBlockId == null) {
+                                    Log.d(TAG, "Did not find final block id for stream with name " + streamPrefix.toUri());
+                                }
+                                else {
+                                    Log.d(TAG, "Found final block id " + finalBlockId + " for stream with name " + streamPrefix.toUri());
+                                    Data appNack = new Data();
+                                    appNack.setName(interest.getName());
+                                    MetaInfo metaInfo = new MetaInfo();
+                                    metaInfo.setType(ContentType.NACK);
+                                    appNack.setContent(new Blob(Helpers.longToBytes(finalBlockId)));
+                                    Log.d(TAG, "Putting application nack with name " + interest.getName().toUri() + " in mcc.");
+                                    mcc_.add(appNack);
+
+                                }
+                                mcc_.storePendingInterest(interest, face);
+
+                            }
+                        }
+                );
+
+                while (!Thread.interrupted()) {
+                    if (audioPacketTransferQueue_.size() != 0) {
+
+                        Data data = (Data) audioPacketTransferQueue_.poll();
+                        if (data == null) continue;
+                        Log.d(TAG, "NetworkThread received data packet." + "\n" +
+                                "Name: " + data.getName() + "\n" +
+                                "FinalBlockId: " + data.getMetaInfo().getFinalBlockId().getValue().toHex());
+                        mcc_.add(data);
+
+                        callbacks_.onAudioPacket(data);
+
+                    }
+                    face_.processEvents();
+                }
+
+            } catch (ArrayIndexOutOfBoundsException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (EncodingException e) {
+                e.printStackTrace();
+            } catch (SecurityException e) {
+                e.printStackTrace();
+            }
+
+            Log.d(TAG,"NetworkThread stopped.");
+
+        }
+
+        // taken from https://github.com/named-data-mobile/NFD-android/blob/4a20a88fb288403c6776f81c1d117cfc7fced122/app/src/main/java/net/named_data/nfd/utils/NfdcHelper.java
+        private KeyChain configureKeyChain() {
+
+            final MemoryIdentityStorage identityStorage = new MemoryIdentityStorage();
+            final MemoryPrivateKeyStorage privateKeyStorage = new MemoryPrivateKeyStorage();
+            final KeyChain keyChain = new KeyChain(new IdentityManager(identityStorage, privateKeyStorage),
+                    new SelfVerifyPolicyManager(identityStorage));
+
+            Name name = new Name("/tmp-identity");
+
+            try {
+                // create keys, certs if necessary
+                if (!identityStorage.doesIdentityExist(name)) {
+                    keyChain.createIdentityAndCertificate(name);
+
+                    // set default identity
+                    keyChain.getIdentityManager().setDefaultIdentity(name);
+                }
+            }
+            catch (SecurityException e){
+                e.printStackTrace();
+            }
+
+            return keyChain;
         }
 
     }

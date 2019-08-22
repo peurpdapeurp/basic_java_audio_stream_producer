@@ -9,9 +9,25 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 public class Helpers {
+
+    // https://stackoverflow.com/questions/4485128/how-do-i-convert-long-to-byte-and-back-in-java
+    public static byte[] longToBytes(long x) {
+        ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+        buffer.putLong(x);
+        return buffer.array();
+    }
+
+    // https://stackoverflow.com/questions/4485128/how-do-i-convert-long-to-byte-and-back-in-java
+    public static long bytesToLong(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+        buffer.put(bytes);
+        buffer.flip();//need flip
+        return buffer.getLong();
+    }
 
     public static long getRandomLongBetweenRange(double min, double max){
         long x = (long) ((Math.random()*((max-min)+1))+min);
