@@ -20,6 +20,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
 
     Button recordButton_;
+    Button generateRandomIdButton_;
     TextView uiLog_;
     EditText streamNameInput_;
     EditText streamIdInput_;
@@ -73,6 +74,14 @@ public class MainActivity extends AppCompatActivity {
                         return true;
                 }
                 return false;
+            }
+        });
+
+        generateRandomIdButton_ = (Button) findViewById(R.id.generate_id_button);
+        generateRandomIdButton_.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                streamIdInput_.setText(Long.toString(Helpers.getRandomLongBetweenRange(0, 10000)));
             }
         });
 

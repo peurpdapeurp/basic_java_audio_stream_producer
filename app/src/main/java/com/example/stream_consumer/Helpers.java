@@ -13,6 +13,11 @@ import java.util.Arrays;
 
 public class Helpers {
 
+    public static long getRandomLongBetweenRange(double min, double max){
+        long x = (long) ((Math.random()*((max-min)+1))+min);
+        return x;
+    }
+
     public static final byte[] temp_key = new byte[] {1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
     private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
