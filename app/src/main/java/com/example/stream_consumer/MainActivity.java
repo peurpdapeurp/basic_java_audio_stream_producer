@@ -22,9 +22,9 @@ public class MainActivity extends AppCompatActivity {
     Button recordButton_;
     TextView uiLog_;
     EditText streamNameInput_;
+    EditText streamIdInput_;
     AudioStreamer streamer_;
     NetworkThread net_;
-    int currentStreamID_ = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,7 +44,8 @@ public class MainActivity extends AppCompatActivity {
                             public void run() {
                                 uiLog_.append("---" + "Time: " + System.currentTimeMillis() + "---" + "\n" +
                                         "Published audio data packet." + "\n" +
-                                        "Name: " + audioPacket.getName() + "\n");
+                                        "Name: " + audioPacket.getName() + "\n" +
+                                        "\n");
                             }
                         });
                     }
@@ -54,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
         streamer_ = new AudioStreamer(streamToNetworkQueue);
 
         streamNameInput_ = (EditText) findViewById(R.id.stream_name_input);
+        streamIdInput_ = (EditText) findViewById(R.id.stream_id_input);
 
         recordButton_ = (Button) findViewById(R.id.record_button);
         recordButton_.setOnTouchListener(new View.OnTouchListener(){
@@ -63,12 +65,11 @@ public class MainActivity extends AppCompatActivity {
                     case MotionEvent.ACTION_DOWN:
                         streamer_.start(new Name(getString(R.string.network_prefix))
                                             .append(streamNameInput_.getText().toString())
-                                            .append(Integer.toString(currentStreamID_))
+                                            .append(streamIdInput_.getText().toString())
                                             .appendVersion(0));
                         return true;
                     case MotionEvent.ACTION_UP:
                         streamer_.stop();
-                        currentStreamID_++;
                         return true;
                 }
                 return false;

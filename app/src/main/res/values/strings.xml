@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Basic NDN Audio Streamer</string>
+    <string name="app_name">NASP</string>
     <string name="network_prefix">/basic_ndn_audio_streamer</string>
 </resources>

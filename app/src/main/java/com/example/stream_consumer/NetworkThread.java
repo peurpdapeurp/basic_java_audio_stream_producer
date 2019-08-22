@@ -93,6 +93,7 @@ public class NetworkThread implements Runnable {
             while (!Thread.interrupted()) {
                 if (inputQueue_.size() != 0) {
                     Data data = (Data) inputQueue_.poll();
+                    if (data == null) continue;
                     Log.d(TAG, "NetworkThread received data packet." + "\n" +
                             "Name: " + data.getName() + "\n" +
                             "FinalBlockId: " + data.getMetaInfo().getFinalBlockId().getValue().toHex());

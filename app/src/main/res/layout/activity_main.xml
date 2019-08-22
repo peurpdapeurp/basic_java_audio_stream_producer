@@ -19,6 +19,12 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
+        <TextView
+            android:id="@+id/stream_name_input_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Stream name:" />
+
         <EditText
             android:id="@+id/stream_name_input"
             android:layout_width="match_parent"
@@ -27,9 +33,23 @@
             android:inputType="textPersonName"
             android:text="default_stream_name" />
 
+        <TextView
+            android:id="@+id/stream_id_input_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Stream id:" />
+
+        <EditText
+            android:id="@+id/stream_id_input"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ems="10"
+            android:inputType="textPersonName"
+            android:text="0" />
+
         <ScrollView
             android:layout_width="match_parent"
-            android:layout_height="421dp">
+            android:layout_height="360dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
