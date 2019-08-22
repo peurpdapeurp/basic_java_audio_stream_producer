@@ -239,17 +239,29 @@ public class AudioStreamer implements Runnable {
         }
 
         public void stop() {
-            if (t_ != null) {
-                recorder_.stop();
-                recorder_.release();
-                recorder_ = null;
+            try {
+                if (recorder_ != null) {
+                    recorder_.stop();
+                }
                 Log.d(TAG, "Recording stopped.");
-                t_.interrupt();
-                try {
+                if (t_ != null) {
+
+                    t_.interrupt();
                     t_.join();
-                } catch (InterruptedException e) {}
-                t_ = null;
+
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (IllegalStateException e) {
+                e.printStackTrace();
+            } catch (RuntimeException e) {
+                e.printStackTrace();
             }
+            if (recorder_ != null) {
+                recorder_.release();
+            }
+            recorder_ = null;
+            t_ = null;
         }
 
         @Override
