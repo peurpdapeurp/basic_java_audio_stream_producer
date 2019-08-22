@@ -21,6 +21,7 @@ public class MainActivity extends AppCompatActivity {
 
     Button recordButton_;
     Button generateRandomIdButton_;
+    Button clearLogButton_;
     TextView uiLog_;
     EditText streamNameInput_;
     EditText streamIdInput_;
@@ -74,6 +75,14 @@ public class MainActivity extends AppCompatActivity {
                         return true;
                 }
                 return false;
+            }
+        });
+
+        clearLogButton_ = (Button) findViewById(R.id.clear_log_button);
+        clearLogButton_.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                uiLog_.setText("");
             }
         });
 
