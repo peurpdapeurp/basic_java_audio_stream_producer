@@ -13,6 +13,7 @@ import java.util.concurrent.LinkedTransferQueue;
 import android.content.Context;
 import android.media.MediaRecorder;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
 import android.util.Log;
 
 import net.named_data.jndn.ContentType;
@@ -212,6 +213,8 @@ public class AudioStreamer implements Runnable {
                     }
 
                 }
+
+                SystemClock.sleep(100); // sleep to reduce battery usage
 
             }
 
@@ -514,6 +517,8 @@ public class AudioStreamer implements Runnable {
 
                     }
                     face_.processEvents();
+
+                    SystemClock.sleep(100); // sleep to reduce battery usage
                 }
 
             } catch (ArrayIndexOutOfBoundsException e) {
