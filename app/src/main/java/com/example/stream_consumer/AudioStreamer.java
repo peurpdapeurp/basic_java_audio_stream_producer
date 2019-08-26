@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedTransferQueue;
 
@@ -101,8 +100,9 @@ public class AudioStreamer implements Runnable {
         return streamToFinalBlockId_.get(streamPrefix);
     }
 
-    public void start(Name streamPrefix) {
+    public void start(Name streamPrefix, int bundleSize) {
         currentStreamPrefix_ = streamPrefix;
+        bundler_.setMaxBundleSize(bundleSize);
         if (t_ == null) {
             t_ = new Thread(this);
             t_.start();
@@ -329,9 +329,7 @@ public class AudioStreamer implements Runnable {
 
         private final static String TAG = "AudioStreamer_FrameBundler";
 
-        // number of frames per audio bundle
-        public final static int BUNDLE_SIZE = 10;
-
+        private int maxBundleSize_ = 10; // number of frames per audio bundle
         private ArrayList<byte[]> bundle_;
         private int current_bundle_size_; // number of frames in current bundle
 
@@ -345,7 +343,7 @@ public class AudioStreamer implements Runnable {
         }
 
         public boolean addFrame(byte[] frame) {
-            if (current_bundle_size_ == BUNDLE_SIZE)
+            if (current_bundle_size_ == maxBundleSize_)
                 return false;
 
             bundle_.add(frame);
@@ -355,7 +353,7 @@ public class AudioStreamer implements Runnable {
         }
 
         public boolean hasFullBundle() {
-            return (current_bundle_size_ == BUNDLE_SIZE);
+            return (current_bundle_size_ == maxBundleSize_);
         }
 
         public byte[] getCurrentBundle() {
@@ -375,6 +373,10 @@ public class AudioStreamer implements Runnable {
             current_bundle_size_ = 0;
 
             return byte_array_bundle;
+        }
+
+        public void setMaxBundleSize(int bundleSize) {
+            maxBundleSize_ = bundleSize;
         }
 
     }

@@ -23,8 +23,8 @@ public class MainActivity extends AppCompatActivity {
     TextView uiLog_;
     EditText streamNameInput_;
     EditText streamIdInput_;
+    EditText audioBundleSizeInput_;
     AudioStreamer streamer_;
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
 
         streamNameInput_ = (EditText) findViewById(R.id.stream_name_input);
         streamIdInput_ = (EditText) findViewById(R.id.stream_id_input);
+        audioBundleSizeInput_ = (EditText) findViewById(R.id.audio_bundle_size_input);
 
         recordButton_ = (Button) findViewById(R.id.record_button);
         recordButton_.setOnTouchListener(new View.OnTouchListener(){
@@ -60,7 +61,8 @@ public class MainActivity extends AppCompatActivity {
                         streamer_.start(new Name(getString(R.string.network_prefix))
                                             .append(streamNameInput_.getText().toString())
                                             .append(streamIdInput_.getText().toString())
-                                            .appendVersion(0));
+                                            .appendVersion(0),
+                                        Integer.parseInt(audioBundleSizeInput_.getText().toString()));
                         return true;
                     case MotionEvent.ACTION_UP:
                         streamer_.stop();
