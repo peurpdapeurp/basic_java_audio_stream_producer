@@ -35,31 +35,36 @@ import net.named_data.jndn.security.policy.SelfVerifyPolicyManager;
 import net.named_data.jndn.util.Blob;
 import net.named_data.jndn.util.MemoryContentCache;
 
-public class AudioStreamer implements Runnable {
+public class StreamProducer implements Runnable {
 
-    private final static String TAG = "AudioStreamer";
+    private final static String TAG = "StreamProducer";
 
     private final static int MAX_READ_SIZE = 2000;
 
     private Thread t_;
-    MediaRecorderThread mediaRecorderThread_;
-    ParcelFileDescriptor[] mediaRecorderPfs_;
-    ParcelFileDescriptor mediaRecorderReadPfs_, mediaRecorderWritePfs_;
-    InputStream mediaRecorderInputStream_;
-    ADTSFrameReadingState readingState_;
-    FrameBundler bundler_;
-    FramePacketizer packetizer_;
-    long currentStreamID_ = 0;
-    long currentSegmentNum_ = 0;
-    Name currentStreamPrefix_;
-    ConcurrentHashMap<Name, Long> streamToFinalBlockId_; // records final block id of stream names
-    LinkedTransferQueue<Data> audioPacketTransferQueue_;
-    NetworkThread networkThread_;
-    Context ctx_;
-    Callbacks callbacks_;
+    private MediaRecorderThread mediaRecorderThread_;
+    private ParcelFileDescriptor[] mediaRecorderPfs_;
+    private ParcelFileDescriptor mediaRecorderReadPfs_, mediaRecorderWritePfs_;
+    private InputStream mediaRecorderInputStream_;
+    private ADTSFrameReadingState readingState_;
+    private FrameBundler bundler_;
+    private FramePacketizer packetizer_;
+    private long currentStreamID_ = 0;
+    private long currentSegmentNum_ = 0;
+    private Name currentStreamPrefix_;
+    private ConcurrentHashMap<Name, Long> streamToFinalBlockId_; // records final block id of stream names
+    private LinkedTransferQueue<Data> audioPacketTransferQueue_;
+    private NetworkThread networkThread_;
+    private Context ctx_;
+    private Options options_;
 
-    public interface Callbacks {
-        void onAudioPacket(Data audioPacket);
+    public static class Options {
+        public Options(long framesPerSegment, int producerSamplingRate) {
+            this.framesPerSegment = framesPerSegment;
+            this.producerSamplingRate = producerSamplingRate;
+        }
+        long framesPerSegment;
+        int producerSamplingRate;
     }
 
     // reference for ADTS header format: https://wiki.multimedia.cx/index.php/ADTS
@@ -69,12 +74,12 @@ public class AudioStreamer implements Runnable {
         int current_bytes_read = 0;
     }
 
-    public AudioStreamer(Context ctx, Callbacks callbacks) {
+    public StreamProducer(Context ctx, Options options) {
+        options_ = options;
         ctx_ = ctx;
-        callbacks_ = callbacks;
         // set up necessary state
         readingState_ = new ADTSFrameReadingState();
-        bundler_ = new FrameBundler();
+        bundler_ = new FrameBundler(options_.framesPerSegment);
         packetizer_ = new FramePacketizer();
         audioPacketTransferQueue_ = new LinkedTransferQueue<>();
 
@@ -94,6 +99,11 @@ public class AudioStreamer implements Runnable {
 
         networkThread_ = new NetworkThread(new Name(ctx_.getString(R.string.network_prefix)));
 
+        Log.d(TAG, System.currentTimeMillis() + ": " +
+                "Initialized (" +
+                "framesPerSegment " + options_.framesPerSegment + ", " +
+                "producerSamplingRate " + options_.producerSamplingRate +
+                ")");
     }
 
     public Long getFinalBlockIdOfStream(Name streamPrefix) {
@@ -123,7 +133,7 @@ public class AudioStreamer implements Runnable {
 
     public void run() {
 
-        Log.d(TAG,"AudioStreamer frame processor started.");
+        Log.d(TAG,"StreamProducer frame processor started.");
 
         byte[] final_adts_frame_buffer;
 
@@ -218,7 +228,7 @@ public class AudioStreamer implements Runnable {
 
             }
 
-            Log.d(TAG, "AudioStreamer frame processor was interrupted; checking for last audio bundle...");
+            Log.d(TAG, "StreamProducer frame processor was interrupted; checking for last audio bundle...");
             if (bundler_.getCurrentBundleSize() > 0) {
                 Log.d(TAG, "Detected a leftover audio bundle after recording ended with " + bundler_.getCurrentBundleSize() + " frames," +
                                 " publishing a partially filled end of stream data packet (segment number " + currentSegmentNum_ + ").");
@@ -252,7 +262,7 @@ public class AudioStreamer implements Runnable {
             e.printStackTrace();
         }
 
-        Log.d(TAG,"AudioStreamer frame processor stopped.");
+        Log.d(TAG,"StreamProducer frame processor stopped.");
 
     }
 
@@ -310,7 +320,7 @@ public class AudioStreamer implements Runnable {
             recorder_.setOutputFormat(MediaRecorder.OutputFormat.AAC_ADTS);
             recorder_.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
             recorder_.setAudioChannels(1);
-            recorder_.setAudioSamplingRate(8000);
+            recorder_.setAudioSamplingRate(options_.producerSamplingRate);
             recorder_.setAudioEncodingBitRate(10000);
             recorder_.setOutputFile(ofs_);
 
@@ -329,11 +339,12 @@ public class AudioStreamer implements Runnable {
 
         private final static String TAG = "AudioStreamer_FrameBundler";
 
-        private int maxBundleSize_ = 10; // number of frames per audio bundle
+        private long maxBundleSize_ = 10; // number of frames per audio bundle
         private ArrayList<byte[]> bundle_;
         private int current_bundle_size_; // number of frames in current bundle
 
-        FrameBundler() {
+        FrameBundler(long maxBundleSize) {
+            maxBundleSize = maxBundleSize_;
             bundle_ = new ArrayList<byte[]>();
             current_bundle_size_ = 0;
         }
@@ -412,7 +423,7 @@ public class AudioStreamer implements Runnable {
 
     private class NetworkThread implements Runnable {
 
-        private final static String TAG = "NetworkThread";
+        private final static String TAG = "AudioStreamer_NetworkThread";
 
         private Thread t_;
         Face face_;
@@ -514,8 +525,6 @@ public class AudioStreamer implements Runnable {
                                 "Name: " + data.getName() + "\n" +
                                 "FinalBlockId: " + data.getMetaInfo().getFinalBlockId().getValue().toHex());
                         mcc_.add(data);
-
-                        callbacks_.onAudioPacket(data);
 
                     }
                     face_.processEvents();
