@@ -286,6 +286,10 @@ public class StreamProducer implements Runnable {
         }
 
         public void stop() {
+            // introduce a half a second delay for the end of stream recording, so that MediaRecorder
+            // doesn't cut off end of stream
+            SystemClock.sleep(500);
+
             try {
                 if (recorder_ != null) {
                     recorder_.stop();
