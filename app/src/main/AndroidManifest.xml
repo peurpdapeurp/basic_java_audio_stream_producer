@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.stream_consumer">
+    package="com.example.stream_producer">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
@@ -14,7 +14,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name="com.example.stream_consumer.MainActivity">
+        <activity android:name="com.example.stream_producer.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -22,7 +22,7 @@
             </intent-filter>
         </activity>
 
-        <receiver android:exported="true" android:name="com.example.stream_consumer.PTTButtonPressReceiver">
+        <receiver android:exported="true" android:name="com.example.stream_producer.PTTButtonPressReceiver">
             <intent-filter android:priority="999999999">
                 <action android:name="com.sonim.intent.action.PTT_KEY_DOWN" />
                 <action android:name="com.sonim.intent.action.PTT_KEY_UP" />

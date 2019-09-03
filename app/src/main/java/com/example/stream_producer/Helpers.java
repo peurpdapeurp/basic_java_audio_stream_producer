@@ -1,5 +1,5 @@
 
-package com.example.stream_consumer;
+package com.example.stream_producer;
 
 import android.util.Log;
 

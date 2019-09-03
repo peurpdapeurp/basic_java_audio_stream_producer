@@ -41,7 +41,7 @@
             android:orientation="horizontal">
 
             <LinearLayout
-                android:layout_width="243dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
@@ -63,11 +63,11 @@
             </LinearLayout>
 
             <Button
-                android:id="@+id/generate_random_id_button"
-                android:layout_width="151dp"
+                android:id="@+id/increment_id_button"
+                android:layout_width="142dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:text="Generate Random Id" />
+                android:text="Increment Id" />
         </LinearLayout>
 
         <LinearLayout
@@ -135,9 +135,24 @@
         </LinearLayout>
 
         <TextView
-            android:id="@+id/stream_fetch_statistics"
+            android:id="@+id/publishing_progress_bar_label"
             android:layout_width="match_parent"
-            android:layout_height="248dp" />
+            android:layout_height="wrap_content"
+            android:text=""
+            android:textColor="#000000"
+            android:textStyle="bold" />
+
+        <com.example.stream_producer.custom_progress_bar.CustomProgressBar
+            android:id="@+id/publishing_progress_bar"
+            android:layout_width="match_parent"
+            android:layout_height="20dp"
+            android:layout_margin="5dp"
+            android:max="100"
+            android:paddingLeft="0dp"
+            android:paddingRight="0dp"
+            android:progress="0"
+            android:progressDrawable="@android:color/transparent"
+            android:thumbOffset="0dp" />
 
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

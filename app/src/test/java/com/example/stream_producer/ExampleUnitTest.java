@@ -1,4 +1,4 @@
-package com.example.stream_consumer;
+package com.example.stream_producer;
 
 import org.junit.Test;
 

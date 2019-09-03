@@ -1,5 +1,5 @@
 
-package com.example.stream_consumer;
+package com.example.stream_producer;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -11,6 +11,7 @@ import java.util.concurrent.LinkedTransferQueue;
 
 import android.content.Context;
 import android.media.MediaRecorder;
+import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.util.Log;
@@ -39,7 +40,12 @@ public class StreamProducer implements Runnable {
 
     private final static String TAG = "StreamProducer";
 
+    // Private constants
     private final static int MAX_READ_SIZE = 2000;
+
+    // Events for stream statistics and ui notifications
+    private static final int EVENT_SEGMENT_PUBLISHED = 0;
+    private static final int EVENT_FINAL_SEGMENT_RECORDED = 1;
 
     private Thread t_;
     private MediaRecorderThread mediaRecorderThread_;
@@ -57,6 +63,7 @@ public class StreamProducer implements Runnable {
     private NetworkThread networkThread_;
     private Context ctx_;
     private Options options_;
+    private Handler uiHandler_;
 
     public static class Options {
         public Options(long framesPerSegment, int producerSamplingRate) {
@@ -74,7 +81,8 @@ public class StreamProducer implements Runnable {
         int current_bytes_read = 0;
     }
 
-    public StreamProducer(Context ctx, Options options) {
+    public StreamProducer(Context ctx, Handler uiHandler, Options options) {
+        uiHandler_ = uiHandler;
         options_ = options;
         ctx_ = ctx;
         // set up necessary state
@@ -97,7 +105,7 @@ public class StreamProducer implements Runnable {
 
         streamToFinalBlockId_ = new ConcurrentHashMap<>();
 
-        networkThread_ = new NetworkThread(new Name(ctx_.getString(R.string.network_prefix)));
+        networkThread_ = new NetworkThread(new Name(ctx_.getString(R.string.network_prefix)), uiHandler_);
 
         Log.d(TAG, System.currentTimeMillis() + ": " +
                 "Initialized (" +
@@ -252,6 +260,8 @@ public class StreamProducer implements Runnable {
 
                 audioPacketTransferQueue_.add(endOfStreamPacket);
             }
+
+            notifyUiEvent(EVENT_FINAL_SEGMENT_RECORDED, currentSegmentNum_);
 
             // reset the segment number
             currentSegmentNum_ = 0;
@@ -430,12 +440,14 @@ public class StreamProducer implements Runnable {
         private final static String TAG = "AudioStreamer_NetworkThread";
 
         private Thread t_;
-        Face face_;
-        MemoryContentCache mcc_;
-        Name networkPrefix_;
+        private Face face_;
+        private MemoryContentCache mcc_;
+        private Name networkPrefix_;
+        Handler uiHandler_;
 
-        public NetworkThread(Name networkPrefix) {
+        public NetworkThread(Name networkPrefix, Handler uiHandler) {
             networkPrefix_ = networkPrefix;
+            uiHandler_ = new Handler(uiHandler.getLooper());
         }
 
         public void start() {
@@ -528,6 +540,7 @@ public class StreamProducer implements Runnable {
                         Log.d(TAG, "NetworkThread received data packet." + "\n" +
                                 "Name: " + data.getName() + "\n" +
                                 "FinalBlockId: " + data.getMetaInfo().getFinalBlockId().getValue().toHex());
+                        notifyUiEvent(EVENT_SEGMENT_PUBLISHED, data.getName().get(-1).toSegment());
                         mcc_.add(data);
 
                     }
@@ -576,6 +589,23 @@ public class StreamProducer implements Runnable {
             return keyChain;
         }
 
+    }
+
+    private void notifyUiEvent(int event_code, long arg1) {
+        int what;
+        switch (event_code) {
+            case EVENT_SEGMENT_PUBLISHED:
+                what = MainActivity.MSG_STREAM_PRODUCER_SEGMENT_PUBLISHED;
+                break;
+            case EVENT_FINAL_SEGMENT_RECORDED:
+                what = MainActivity.MSG_STREAM_PRODUCER_FINAL_SEGMENT_RECORDED;
+                break;
+            default:
+                throw new IllegalStateException("unrecognized event_code: " + event_code);
+        }
+        uiHandler_
+                .obtainMessage(what, new MainActivity.UiEventInfo(currentStreamPrefix_, arg1))
+                .sendToTarget();
     }
 
 }
