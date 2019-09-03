@@ -32,6 +32,7 @@ public class MainActivity extends AppCompatActivity {
     public static final int MSG_STREAM_PRODUCER_SEGMENT_PUBLISHED = 0;
     public static final int MSG_STREAM_PRODUCER_FINAL_SEGMENT_RECORDED = 1;
 
+    TextView currentStreamNameDisplay_;
     CustomProgressBar publishingProgressBar_;
     TextView publishingProgressBarLabel_;
     Button incrementIdButton_;
@@ -60,9 +61,6 @@ public class MainActivity extends AppCompatActivity {
         // Public constants
         private static final int FINAL_BLOCK_ID_UNKNOWN = -1;
         private static final int NO_SEGMENTS_PUBLISHED = -1;
-
-        private StreamState() {
-        }
 
         private long finalBlockId = FINAL_BLOCK_ID_UNKNOWN;
         private long numSegsPublished = 0;
@@ -125,11 +123,13 @@ public class MainActivity extends AppCompatActivity {
                         streamStates_.remove(currentStreamName_);
                         currentStreamName_ = null;
                     }
-                    publishingProgressBar_.reset();
                     currentStreamName_ = new Name(getString(R.string.network_prefix))
                             .append(streamNameInput_.getText().toString())
                             .append(streamIdInput_.getText().toString())
                             .appendVersion(0);
+
+                    resetUi();
+
                     streamer_.start(currentStreamName_,
                             Integer.parseInt(framesPerSegmentInput_.getText().toString()));
                     streamStates_.put(currentStreamName_, new StreamState());
@@ -142,6 +142,7 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
+        currentStreamNameDisplay_ = (TextView) findViewById(R.id.current_stream_name_display);
         streamNameInput_ = (EditText) findViewById(R.id.stream_name_input);
         streamIdInput_ = (EditText) findViewById(R.id.stream_id_input);
         framesPerSegmentInput_ = (EditText) findViewById(R.id.frames_per_segment_input);
@@ -220,5 +221,12 @@ public class MainActivity extends AppCompatActivity {
                                     "unknown" : streamState.finalBlockId) +
                         ")";
         publishingProgressBarLabel_.setText(label);
+    }
+
+    private void resetUi() {
+        if (currentStreamName_ != null) {
+            currentStreamNameDisplay_.setText(currentStreamName_.toString());
+        }
+        publishingProgressBar_.reset();
     }
 }

@@ -2,4 +2,5 @@
     <string name="app_name">NASP</string>
     <string name="network_prefix">/ndnpttv2</string>
     <string name="publishing_progress_bar_label">Publishing Progress</string>
+    <string name="current_stream_name_label">Published Stream Name:</string>
 </resources>
