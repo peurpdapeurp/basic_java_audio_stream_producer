@@ -139,11 +139,5 @@
             android:layout_width="match_parent"
             android:layout_height="248dp" />
 
-        <Button
-            android:id="@+id/record_button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Hold Down to Record" />
-
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

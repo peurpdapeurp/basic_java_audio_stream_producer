@@ -2,10 +2,14 @@
 package com.example.stream_consumer;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import android.annotation.SuppressLint;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
-import android.view.MotionEvent;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -16,13 +20,30 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
 
-    Button recordButton_;
     Button generateRandomIdButton_;
     EditText streamNameInput_;
     EditText streamIdInput_;
     EditText framesPerSegmentInput_;
     EditText producerSamplingRateInput_;
     StreamProducer streamer_;
+
+    BroadcastReceiver pttPressListener_= new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (intent.getAction().equals(PTTButtonPressReceiver.ACTION_PTT_KEY_DOWN)) {
+                streamer_.start(new Name(getString(R.string.network_prefix))
+                                .append(streamNameInput_.getText().toString())
+                                .append(streamIdInput_.getText().toString())
+                                .appendVersion(0),
+                        Integer.parseInt(framesPerSegmentInput_.getText().toString()));
+            } else if (intent.getAction().equals(PTTButtonPressReceiver.ACTION_PTT_KEY_UP)) {
+                streamer_.stop();
+            } else {
+                Log.w(TAG, "pttPressListener got weird intent with action: " +
+                        intent.getAction());
+            }
+        }
+    };
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -40,26 +61,6 @@ public class MainActivity extends AppCompatActivity {
                 Integer.parseInt(producerSamplingRateInput_.getText().toString())
         ));
 
-        recordButton_ = (Button) findViewById(R.id.record_button);
-        recordButton_.setOnTouchListener(new View.OnTouchListener(){
-            @Override
-            public boolean onTouch(View view, MotionEvent event) {
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        streamer_.start(new Name(getString(R.string.network_prefix))
-                                            .append(streamNameInput_.getText().toString())
-                                            .append(streamIdInput_.getText().toString())
-                                            .appendVersion(0),
-                                        Integer.parseInt(framesPerSegmentInput_.getText().toString()));
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                        streamer_.stop();
-                        return true;
-                }
-                return false;
-            }
-        });
-
         generateRandomIdButton_ = (Button) findViewById(R.id.generate_random_id_button);
         generateRandomIdButton_.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -68,5 +69,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        LocalBroadcastManager.getInstance(this).registerReceiver(pttPressListener_,
+                PTTButtonPressReceiver.getIntentFilter());
+
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(pttPressListener_);
     }
 }

@@ -21,6 +21,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-    </application>
 
+        <receiver android:exported="true" android:name="com.example.stream_consumer.PTTButtonPressReceiver">
+            <intent-filter android:priority="999999999">
+                <action android:name="com.sonim.intent.action.PTT_KEY_DOWN" />
+                <action android:name="com.sonim.intent.action.PTT_KEY_UP" />
+            </intent-filter>
+        </receiver>
+
+    </application>
 </manifest>
