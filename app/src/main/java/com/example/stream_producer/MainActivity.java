@@ -100,12 +100,14 @@ public class MainActivity extends AppCompatActivity {
                         }
                         updatePublishingProgressBar(segNum, streamState);
                         updatePublishingProgressBarLabel(streamState);
+                        Log.d(TAG, "published segment " + segNum);
                         break;
                     }
                     case MSG_STREAM_PRODUCER_FINAL_SEGMENT_RECORDED: {
                         streamState.finalBlockId = uiEventInfo.arg1;
                         updatePublishingProgressBar(streamState);
                         updatePublishingProgressBarLabel(streamState);
+                        Log.d(TAG, "got final block id " + streamState.finalBlockId);
                         break;
                     }
                     default: {
@@ -218,7 +220,7 @@ public class MainActivity extends AppCompatActivity {
                         "published " + streamState.numSegsPublished + ", " +
                         "total " +
                             ((streamState.finalBlockId == StreamState.FINAL_BLOCK_ID_UNKNOWN) ?
-                                    "unknown" : streamState.finalBlockId) +
+                                    "unknown" : streamState.finalBlockId + 1) +
                         ")";
         publishingProgressBarLabel_.setText(label);
     }
