@@ -28,9 +28,6 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MainActivity";
 
-    // Private constants
-    public static final int RECORDING_DELAY_MS = 3000;
-
     // Messages from Stream Producer
     public static final int MSG_STREAM_PRODUCER_SEGMENT_PUBLISHED = 0;
     public static final int MSG_STREAM_PRODUCER_FINAL_SEGMENT_RECORDED = 1;
@@ -38,6 +35,7 @@ public class MainActivity extends AppCompatActivity {
     CustomProgressBar publishingProgressBar_;
     TextView publishingProgressBarLabel_;
     Button incrementIdButton_;
+    Button generateRandomStreamNameButton_;
     EditText streamNameInput_;
     EditText streamIdInput_;
     EditText framesPerSegmentInput_;
@@ -47,7 +45,6 @@ public class MainActivity extends AppCompatActivity {
     Handler handler_;
     BroadcastReceiver pttPressListener_;
     Name currentStreamName_;
-    boolean recordingDisabled_ = false;
     Context ctx_;
 
     public static class UiEventInfo {
@@ -160,6 +157,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 streamIdInput_.setText(Long.toString(Long.parseLong(streamIdInput_.getText().toString()) + 1));
+            }
+        });
+
+        generateRandomStreamNameButton_ = (Button) findViewById(R.id.generate_random_name_button);
+        generateRandomStreamNameButton_.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                streamNameInput_.setText(Long.toString(Helpers.getRandomLongBetweenRange(0, 9999)));
             }
         });
 
